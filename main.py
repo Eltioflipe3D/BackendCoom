@@ -55,7 +55,7 @@ def verifyPassword(password: str, hashed: bytes) -> bool:
     return bcrypt.checkpw(passwordBytes, hashed)
 
 
-
+#DEPENDS -> asks for token and then gives the sweet sweet whole user
 def getCurrentUser(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     try:
         decoded = jwt.decode(creds.credentials, JWT_SECRET, algorithms=["HS256"])
@@ -79,7 +79,32 @@ def register(user: User):
     if userExists:
         return {"message": "user already exists"}
     else:
-        db.users.insert_one({"username": user.username, "email": user.email, "password": hashPassword(user.password)})
+        db.users.insert_one(
+            {
+                "username": user.username,
+                "email": user.email,
+                "password": hashPassword(user.password),
+
+                #Various stats and stuff, add here for greatness
+
+                "winCount": 0,
+                "monsterKills": 0,
+                "bossKills": 0,
+                "collectablesFound": [],
+                "bestTime": 0,
+                "deaths": 0,
+                "dateJoined": datetime.now(),
+
+                #current save file
+                "saveLevel": "",
+                "saveCurrentHealth": 0,
+                "saveMaxHealth": 0,
+                "saveWeapons": [],
+                "saveUpgrades": [],
+
+
+            }
+        )
         return {"message": "user created"}
 
 
@@ -99,8 +124,17 @@ def login(user: loginUser):
     return {"token": token}
 
 
+#get current user info
+#Requires token
+@coom.get("/me")
+def me(dbUser: dict = Depends(getCurrentUser)):
+    return {"username": dbUser["username"], "email": dbUser["email"]}
+
+
+
 
 #Change (or set) a user's profile pic
+#Requires token
 @coom.post("/pfp")
 async def changePfp(
     file: UploadFile,
@@ -138,10 +172,58 @@ async def getPfp(username: str):
     else:
         return {"message": "user not found"}
 
-#get current user info
-@coom.get("/me")
-def me(dbUser: dict = Depends(getCurrentUser)):
-    return {"username": dbUser["username"], "email": dbUser["email"]}
+
+#patch a single field, great for updating values and adding new ones, amazing shi ngl
+#Requires token
+@coom.patch("/me/updatefield")
+def updateUserInfo(fieldName: str, fieldValue: str, dbUser: dict = Depends(getCurrentUser)):
+    db.users.find_one_and_update({"_id": dbUser["_id"]}, {"$set": {fieldName: fieldValue}})
+    return {"message": True}
+
+
+
+#deprecated, cuz no checking if field exists is easier and more fun
+#patch a single field, great for updating values
+#Requires token
+#@coom.patch("/me/updatefield")
+#def updateUserInfo(fieldName: str, fieldValue: str, dbUser: dict = Depends(getCurrentUser)):
+    user = db.users.find_one({"_id": dbUser["_id"]})
+    if fieldName in user:
+        db.users.find_one_and_update({"_id": dbUser["_id"]}, {"$set": {fieldName: fieldValue}})
+        return {"message": True}
+    else:
+        return {"message": False}
+
+
+
+#get rankings
+#time in seconds
+@coom.get("/rankings/{num_rankings}")
+def getRankings(num_rankings: int):
+    rankings = db.rankings.find().sort("bestTime", -1).limit(num_rankings)
+    rankings_list = []
+    for ranking in rankings:
+        ranking_dict = {
+            "username": ranking["username"],
+            "bestTime": ranking["bestTime"],
+            "difficulty": ranking["difficulty"],
+        }
+        rankings_list.append(ranking_dict)
+    return rankings_list
+
+
+#post new ranking
+#time in seconds
+#Requires token
+@coom.post("/rankings")
+def postRanking(time: int, difficulty: str, dbUser: dict = Depends(getCurrentUser)):
+    db.rankings.insert_one({
+        "username": dbUser["username"],
+        "bestTime": time,
+        "difficulty": difficulty,
+    })
+    return {"message": True}
+
 
 
 
