@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import bcrypt
 from dotenv import load_dotenv
 
@@ -12,6 +13,9 @@ from bson.objectid import ObjectId
 
 import jwt
 
+
+# Load environment variables first
+load_dotenv()
 
 #CONSTANTS
 JWT_SECRET = os.getenv("JWT_SECRET")
@@ -29,8 +33,6 @@ class loginUser(BaseModel):
 
 
 #connect stuff
-
-load_dotenv()
 
 client = pymongo.MongoClient(os.getenv("MONGODB_URI"))
 db = client[os.getenv("DB_NAME")]
@@ -128,7 +130,23 @@ def login(user: loginUser):
 #Requires token
 @coom.get("/me")
 def me(dbUser: dict = Depends(getCurrentUser)):
-    return {"username": dbUser["username"], "email": dbUser["email"]}
+    return {
+        "username": dbUser["username"],
+        "email": dbUser["email"],
+        "profilePic": dbUser.get("profilePic"),
+        "winCount": dbUser.get("winCount"),
+        "monsterKills": dbUser.get("monsterKills"),
+        "bossKills": dbUser.get("bossKills"),
+        "collectablesFound": dbUser.get("collectablesFound"),
+        "bestTime": dbUser.get("bestTime"),
+        "deaths": dbUser.get("deaths"),
+        "dateJoined": dbUser.get("dateJoined"),
+        "saveLevel": dbUser.get("saveLevel"),
+        "saveCurrentHealth": dbUser.get("saveCurrentHealth"),
+        "saveMaxHealth": dbUser.get("saveMaxHealth"),
+        "saveWeapons": dbUser.get("saveWeapons"),
+        "saveUpgrades": dbUser.get("saveUpgrades"),
+    }
 
 
 
@@ -170,7 +188,7 @@ async def getPfp(username: str):
     if dbUser and dbUser.get("profilePic") and os.path.exists(dbUser["profilePic"]):
         return FileResponse(dbUser["profilePic"])
     else:
-        return {"message": "user not found"}
+        return {"message": "user not found or has no pfp"}
 
 
 #patch a single field, great for updating values and adding new ones, amazing shi ngl
@@ -200,7 +218,7 @@ def updateUserInfo(fieldName: str, fieldValue: str, dbUser: dict = Depends(getCu
 #time in seconds
 @coom.get("/rankings/{num_rankings}")
 def getRankings(num_rankings: int):
-    rankings = db.rankings.find().sort("bestTime", -1).limit(num_rankings)
+    rankings = db.rankings.find().sort("bestTime", 1).limit(num_rankings)
     rankings_list = []
     for ranking in rankings:
         ranking_dict = {
